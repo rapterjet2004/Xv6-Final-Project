@@ -16,6 +16,14 @@
 #include "mmu.h"
 #include "proc.h"
 #include "x86.h"
+#include "kbd.h"
+
+#define MAX_HISTORY 10
+#define HIST_LEN 128
+
+char history[MAX_HISTORY][HIST_LEN];
+int history_count = 0;
+int history_current = 0;
 
 static void consputc(int);
 
@@ -204,6 +212,26 @@ struct {
   uint e;  // Edit index
 } input;
 
+  void
+write2buffer(char * cmd)
+{
+  // need to remove the current line the user is typing else the cmd won't work b/c of invisible characters
+  while(input.e != input.w && input.buf[(input.e-1) % INPUT_BUF] != '\n'){
+    input.e--;
+    consputc(BACKSPACE);
+  }
+
+  for(int i = 0; cmd[i] != '\0'; i++) {
+    int char_to_insert = cmd[i];
+    
+    // don't overflow the 128-byte input buffer
+    if (input.e - input.r < INPUT_BUF) {
+      input.buf[input.e++ % INPUT_BUF] = char_to_insert;
+      consputc(char_to_insert); 
+    }
+  }
+}
+
 #define C(x)  ((x)-'@')  // Control-x
 
   void
@@ -233,12 +261,44 @@ consoleintr(int (*getc)(void))
         consputc(BACKSPACE);
       }
       break;
+    case KEY_UP:
+      if (history_count > 0 && history_current > 0) {
+        // Prevent scrolling past the oldest saved command
+        if (history_count - history_current < MAX_HISTORY) {
+          history_current--;
+        }
+        
+        write2buffer(history[history_current % MAX_HISTORY]);
+      }
+      break;
+    case KEY_DN:
+      if (history_current < history_count) {
+        history_current++;
+        if (history_current == history_count) {
+          // If hit the bottom, clear the line
+          write2buffer(""); 
+        } else {
+          write2buffer(history[history_current % MAX_HISTORY]);
+        }
+      }
+      break;
     default:
       if (c != 0 && input.e-input.r < INPUT_BUF) {
         c = (c == '\r') ? '\n' : c;
         input.buf[input.e++ % INPUT_BUF] = c;
         consputc(c);
         if (c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF) {
+
+          int len = input.e - input.w -1;
+          if (len > 0 && len < HIST_LEN - 1) {
+            for (int i = 0; i < len; i++) {
+              history[history_count % MAX_HISTORY][i] = input.buf[(input.w + i) % INPUT_BUF];
+            }
+            history[history_count % MAX_HISTORY][len] = '\0'; // Null terminate
+            history_count++;
+            history_current = history_count; // Reset scrolling position
+          }
+
           input.w = input.e;
           wakeup(&input.r);
         }
