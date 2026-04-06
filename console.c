@@ -212,8 +212,6 @@ struct {
   uint e;  // Edit index
 } input;
 
-// TODO - there is a weird format quirk with this, should fix for a better UX before merging
-
   void
 write2buffer(char * cmd)
 {
@@ -291,7 +289,7 @@ consoleintr(int (*getc)(void))
         consputc(c);
         if (c == '\n' || c == C('D') || input.e == input.r+INPUT_BUF) {
 
-          int len = input.e - input.w;
+          int len = input.e - input.w -1;
           if (len > 0 && len < HIST_LEN - 1) {
             for (int i = 0; i < len; i++) {
               history[history_count % MAX_HISTORY][i] = input.buf[(input.w + i) % INPUT_BUF];
