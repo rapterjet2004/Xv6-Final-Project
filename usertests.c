@@ -19,9 +19,82 @@ failexit(const char * const msg)
   exit();
 }
 
-// Advanced Piping and Redirects
-void appendtest(void) {
+// Advanced Piping and redirects testing
+void
+multipipetest(void)
+{
+  printf(1, "multipipe test\n");
+  int p1[2], p2[2];
+  char buf[100];
+  
+  if(pipe(p1) < 0)
+    failexit("multipipe: pipe1");
+  if(pipe(p2) < 0)
+    failexit("multipipe: pipe2");
 
+  // cmd1 - only writes to p1
+  if(fork() == 0){
+    close(1);           // close stdout
+    dup(p1[1]);         // stdout -> p1 write end
+
+    close(p1[0]);       // close unused read end
+    close(p1[1]);
+    close(p2[0]);
+    close(p2[1]);
+
+    write(1, "hello", 5);
+    exit();
+  }
+
+  // cmd2 - reads from p1, writes to p2
+  if(fork() == 0){
+    close(0);           // stdin
+    dup(p1[0]);         // stdin <- p1 read end
+
+    close(1);           // stdout
+    dup(p2[1]);         // stdout -> p2 write end
+
+    close(p1[0]);
+    close(p1[1]);
+    close(p2[0]);
+    close(p2[1]);
+
+    int n = read(0, buf, sizeof(buf));
+    write(1, buf, n);
+    exit();
+  }
+
+  // cmd3 - only reads from p2
+  if (fork() == 0) {
+    close(0);   // stdin
+    dup(p2[0]); // stdin <- p2 read end
+
+    close(p1[0]);
+    close(p1[1]);
+    close(p2[0]);
+    close(p2[1]);
+
+    int n = read(0, buf, sizeof(buf));
+    buf[n] = '\0'; // null terminate!
+
+    if (strcmp(buf, "hello") != 0)
+      failexit("multipipe: wrong data");
+
+    exit();
+  }
+
+  // parent closes all pipe ends and waits
+  close(p1[0]);
+  close(p1[1]);
+  close(p2[0]);
+  close(p2[1]);
+  wait();
+  wait();
+  wait();
+  printf(1, "multipipe test ok\n");
+}
+
+void appendtest(void) {
   printf(1, "append test\n");
 
   int fd;
@@ -390,58 +463,6 @@ pipe1(void)
   }
   printf(1, "pipe1 ok\n");
 }
-
-void
-pipe1(void)
-{
-  int fds[2], pid;
-  int seq, i, n, cc, total;
-
-  if(pipe(fds) != 0){
-    failexit("pipe()");
-  }
-  pid = fork();
-  seq = 0;
-  if(pid == 0){
-    close(fds[0]);
-    for(n = 0; n < 5; n++){
-      for(i = 0; i < 1033; i++)
-        buf[i] = seq++;
-      if(write(fds[1], buf, 1033) != 1033){
-        failexit("pipe1 oops 1");
-      }
-    }
-    exit();
-  } else if(pid > 0){
-    close(fds[1]);
-    total = 0;
-    cc = 1;
-    while((n = read(fds[0], buf, cc)) > 0){
-      for(i = 0; i < n; i++){
-        if((buf[i] & 0xff) != (seq++ & 0xff)){
-          failexit("pipe1 oops 2");
-          return;
-        }
-      }
-      total += n;
-      cc = cc * 2;
-      if(cc > sizeof(buf))
-        cc = sizeof(buf);
-    }
-    if(total != 5 * 1033){
-      printf(1, "pipe1 oops 3 total %d\n", total);
-      exit();
-    }
-    close(fds[0]);
-    wait();
-  } else {
-    failexit("fork()");
-  }
-  printf(1, "pipe1 ok\n");
-}
-
-
-
 
 // meant to be run w/ at most two CPUs
 void
