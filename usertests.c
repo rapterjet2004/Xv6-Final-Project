@@ -19,6 +19,48 @@ failexit(const char * const msg)
   exit();
 }
 
+// Advanced Piping and Redirects
+void appendtest(void) {
+
+  printf(1, "append test\n");
+
+  int fd;
+  char buf[20];
+
+  fd = open("appendfile", O_CREATE | O_WRONLY);
+  if (fd < 0)
+    failexit("append test: create");
+  write(fd, "hello", 5);
+  close(fd);
+
+  fd = open("appendfile", O_APPEND | O_WRONLY);
+  if (fd < 0)
+    failexit("appendtest: write again");
+  write(fd, "world", 5);
+
+  close(fd);
+
+  // reopen for reading
+  fd = open("appendfile", O_RDONLY);
+  if (fd < 0)
+    failexit("appendtest: open for read");
+
+  // read 10 bytes into buf
+  int n = read(fd, buf, 10);
+  if (n != 10)
+    failexit("appendtest: wrong length");
+
+  buf[n] = 0;
+
+  if (strcmp(buf, "helloworld") != 0)
+    failexit("appendtest: wrong content");
+
+  close(fd);
+  unlink("appendfile");
+
+  printf(1, "append test passed\n");
+}
+
 // does chdir() call iput(p->cwd) in a transaction?
 void
 iputtest(void)
@@ -348,6 +390,58 @@ pipe1(void)
   }
   printf(1, "pipe1 ok\n");
 }
+
+void
+pipe1(void)
+{
+  int fds[2], pid;
+  int seq, i, n, cc, total;
+
+  if(pipe(fds) != 0){
+    failexit("pipe()");
+  }
+  pid = fork();
+  seq = 0;
+  if(pid == 0){
+    close(fds[0]);
+    for(n = 0; n < 5; n++){
+      for(i = 0; i < 1033; i++)
+        buf[i] = seq++;
+      if(write(fds[1], buf, 1033) != 1033){
+        failexit("pipe1 oops 1");
+      }
+    }
+    exit();
+  } else if(pid > 0){
+    close(fds[1]);
+    total = 0;
+    cc = 1;
+    while((n = read(fds[0], buf, cc)) > 0){
+      for(i = 0; i < n; i++){
+        if((buf[i] & 0xff) != (seq++ & 0xff)){
+          failexit("pipe1 oops 2");
+          return;
+        }
+      }
+      total += n;
+      cc = cc * 2;
+      if(cc > sizeof(buf))
+        cc = sizeof(buf);
+    }
+    if(total != 5 * 1033){
+      printf(1, "pipe1 oops 3 total %d\n", total);
+      exit();
+    }
+    close(fds[0]);
+    wait();
+  } else {
+    failexit("fork()");
+  }
+  printf(1, "pipe1 ok\n");
+}
+
+
+
 
 // meant to be run w/ at most two CPUs
 void
@@ -1620,6 +1714,10 @@ main(int argc, char *argv[])
     failexit("already ran user tests -- rebuild fs.img");
   }
   close(open("usertests.ran", O_CREATE));
+
+  // Advanced Piping and Redirects
+
+
 
   argptest();
   createdelete();
