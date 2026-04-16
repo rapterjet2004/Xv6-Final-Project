@@ -513,7 +513,7 @@ shutdown(void)
 
   // Signal QEMU to shutdown via PS/2 controller reset
   // The -action reboot=shutdown flag in Makefile makes QEMU exit on reboot
-  outb(0x64, 0xFE);
+  outw(0x604, 0x2000);
 
   // Halt all CPUs (should not reach here in QEMU)
   cli();
