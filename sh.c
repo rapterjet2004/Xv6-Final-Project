@@ -3,6 +3,8 @@
 #include "types.h"
 #include "user.h"
 #include "fcntl.h"
+#include "stat.h"
+#include "fs.h"
 
 // Parsed command representation
 #define EXEC  1
@@ -78,6 +80,10 @@ runcmd(struct cmd *cmd)
     if(ecmd->argv[0] == 0)
       exit();
     exec(ecmd->argv[0], ecmd->argv);
+    char path[100];
+    path[0] = '/';
+    strcpy(path+1, ecmd->argv[0]);
+    exec(path, ecmd->argv);
     printf(2, "exec %s failed\n", ecmd->argv[0]);
     break;
 
@@ -133,10 +139,64 @@ runcmd(struct cmd *cmd)
 }
 #pragma GCC diagnostic pop
 
+#define MAX_DEPTH 20
+
+void
+printcwd()
+{
+  struct stat st, parent_st;
+  struct dirent de;
+  int fd;
+  int depth = 0;
+  char names[MAX_DEPTH][DIRSIZ+1];
+
+  // go up to root, saving names
+  while(1){
+    if(stat(".", &st) < 0 || stat("..", &parent_st) < 0){
+      printf(2, "/");
+      return;
+    }
+
+    if(st.ino == parent_st.ino){
+      break; // reached root
+    }
+
+    // go up
+    chdir("..");
+
+    fd = open(".", 0);
+
+    while(read(fd, &de, sizeof(de)) == sizeof(de)){
+      if(de.inum == st.ino){
+        memmove(names[depth], de.name, DIRSIZ);
+        names[depth][DIRSIZ] = 0;
+        depth++;
+        break;
+      }
+    }
+
+    close(fd);
+  }
+
+  // print path
+  printf(2, "/");
+  for(int i = depth - 1; i >= 0; i--){
+    printf(2, "%s", names[i]);
+    if(i > 0)
+      printf(2, "/");
+  }
+
+  // restore directory
+  for(int i = depth - 1; i >= 0; i--){
+    chdir(names[i]);
+  }
+}
+
 int
 getcmd(char *buf, int nbuf)
 {
-  printf(2, "$ ");
+  printcwd();
+  printf(2, " $ ");
   memset(buf, 0, nbuf);
   gets(buf, nbuf);
   if(buf[0] == 0) // EOF
