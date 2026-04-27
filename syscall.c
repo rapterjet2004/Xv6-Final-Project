@@ -116,8 +116,10 @@ extern addr_t sys_mknod(void);
 extern addr_t sys_open(void);
 extern addr_t sys_pipe(void);
 extern addr_t sys_read(void);
+extern addr_t sys_reboot(void);
 extern addr_t sys_sbrk(void);
 extern addr_t sys_sleep(void);
+extern addr_t sys_shutdown(void);
 extern addr_t sys_unlink(void);
 extern addr_t sys_wait(void);
 extern addr_t sys_write(void);
@@ -146,6 +148,8 @@ static addr_t (*syscalls[])(void) = {
 [SYS_link]    sys_link,
 [SYS_mkdir]   sys_mkdir,
 [SYS_close]   sys_close,
+[SYS_shutdown] sys_shutdown,
+[SYS_reboot]  sys_reboot,
 };
 
 void

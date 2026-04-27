@@ -87,3 +87,17 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+int
+sys_shutdown(void)
+{
+  shutdown();
+  return 0;  // not reached
+}
+
+int
+sys_reboot(void)
+{
+  reboot();
+  return 0;  // not reached
+}

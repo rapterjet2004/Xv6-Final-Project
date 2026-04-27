@@ -19,6 +19,121 @@ failexit(const char * const msg)
   exit();
 }
 
+// Advanced Piping and redirects testing
+void
+multipipetest(void)
+{
+  printf(1, "multipipe test\n");
+  int p1[2], p2[2];
+  char buf[100];
+  
+  if(pipe(p1) < 0)
+    failexit("multipipe: pipe1");
+  if(pipe(p2) < 0)
+    failexit("multipipe: pipe2");
+
+  // cmd1 - only writes to p1
+  if(fork() == 0){
+    close(1);           // close stdout
+    dup(p1[1]);         // stdout -> p1 write end
+
+    close(p1[0]);       // close unused read end
+    close(p1[1]);
+    close(p2[0]);
+    close(p2[1]);
+
+    write(1, "hello", 5);
+    exit();
+  }
+
+  // cmd2 - reads from p1, writes to p2
+  if(fork() == 0){
+    close(0);           // stdin
+    dup(p1[0]);         // stdin <- p1 read end
+
+    close(1);           // stdout
+    dup(p2[1]);         // stdout -> p2 write end
+
+    close(p1[0]);
+    close(p1[1]);
+    close(p2[0]);
+    close(p2[1]);
+
+    int n = read(0, buf, sizeof(buf));
+    write(1, buf, n);
+    exit();
+  }
+
+  // cmd3 - only reads from p2
+  if (fork() == 0) {
+    close(0);   // stdin
+    dup(p2[0]); // stdin <- p2 read end
+
+    close(p1[0]);
+    close(p1[1]);
+    close(p2[0]);
+    close(p2[1]);
+
+    int n = read(0, buf, sizeof(buf));
+    buf[n] = '\0'; // null terminate!
+
+    if (strcmp(buf, "hello") != 0)
+      failexit("multipipe: wrong data");
+
+    exit();
+  }
+
+  // parent closes all pipe ends and waits
+  close(p1[0]);
+  close(p1[1]);
+  close(p2[0]);
+  close(p2[1]);
+  wait();
+  wait();
+  wait();
+  printf(1, "multipipe test ok\n");
+}
+
+void appendtest(void) {
+  printf(1, "append test\n");
+
+  int fd;
+  char buf[20];
+
+  fd = open("appendfile", O_CREATE | O_WRONLY);
+  if (fd < 0)
+    failexit("append test: create");
+  write(fd, "hello", 5);
+  close(fd);
+
+  fd = open("appendfile", O_APPEND | O_WRONLY);
+  if (fd < 0)
+    failexit("appendtest: write again");
+  write(fd, "world", 5);
+
+  close(fd);
+
+  // reopen for reading
+  fd = open("appendfile", O_RDONLY);
+  if (fd < 0)
+    failexit("appendtest: open for read");
+
+  // read 10 bytes into buf
+  int n = read(fd, buf, 10);
+  if (n != 10)
+    failexit("appendtest: wrong length");
+
+  buf[n] = 0;
+
+  if (strcmp(buf, "helloworld") != 0)
+    failexit("appendtest: wrong content");
+
+  close(fd);
+  unlink("appendfile");
+
+  printf(1, "append test passed\n");
+}
+
 // does chdir() call iput(p->cwd) in a transaction?
 void
 iputtest(void)
@@ -1620,6 +1735,10 @@ main(int argc, char *argv[])
     failexit("already ran user tests -- rebuild fs.img");
   }
   close(open("usertests.ran", O_CREATE));
+
+  // Advanced Piping and Redirects
+
+
 
   argptest();
   createdelete();
