@@ -482,3 +482,79 @@ procdump(void)
     cprintf("\n");
   }
 }
+
+// Gracefully shutdown the system.
+// Flushes filesystem, marks all non-init processes as killed,
+// and halts all CPUs.
+void
+shutdown(void)
+{
+  struct proc *p;
+  int i;
+
+  // Flush filesystem
+  begin_op();
+  end_op();
+
+  // Mark all non-init, non-current processes as killed
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->state != UNUSED && p->pid != initproc->pid && p->pid != proc->pid){
+      p->killed = 1;
+      if(p->state == SLEEPING)
+        p->state = RUNNABLE;
+    }
+  }
+  release(&ptable.lock);
+
+  // Give processes a chance to exit
+  for(i = 0; i < 10; i++)
+    yield();
+
+  // Signal QEMU to shutdown via PS/2 controller reset
+  // The -action reboot=shutdown flag in Makefile makes QEMU exit on reboot
+  outw(0x604, 0x2000);
+
+  // Halt all CPUs (should not reach here in QEMU)
+  cli();
+  for(;;)
+    hlt();
+}
+
+// Reboot the system.
+// Flushes filesystem, marks all non-init processes as killed,
+// attempts a CPU reset, and halts all CPUs.
+void
+reboot(void)
+{
+  struct proc *p;
+  int i;
+
+  // Flush filesystem
+  begin_op();
+  end_op();
+
+  // Mark all non-init, non-current processes as killed
+  acquire(&ptable.lock);
+  for(p = ptable.proc; p < &ptable.proc[NPROC]; p++){
+    if(p->state != UNUSED && p->pid != initproc->pid && p->pid != proc->pid){
+      p->killed = 1;
+      if(p->state == SLEEPING)
+        p->state = RUNNABLE;
+    }
+  }
+  release(&ptable.lock);
+
+  // Give processes a chance to exit
+  for(i = 0; i < 10; i++)
+    yield();
+
+  // Signal QEMU to shutdown via PS/2 controller reset
+  // The -action reboot=shutdown flag in Makefile makes QEMU exit on reboot
+  outb(0x64, 0xFE);
+
+  // Halt all CPUs (should not reach here in QEMU)
+  cli();
+  for(;;)
+    hlt();
+}
